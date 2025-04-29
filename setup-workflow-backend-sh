@@ -1,0 +1,93 @@
+#!/bin/bash
+# Script to set up the workflow automation backend project structure
+
+# Set the base directory
+BASE_DIR="workflow-automation-backend"
+
+# Create the base directory
+mkdir -p "$BASE_DIR"
+cd "$BASE_DIR"
+
+# Create the directories
+mkdir -p app/{api/{v1/endpoints},core,db/migrations,models,schemas,services,tasks,utils,websockets}
+mkdir -p tests/{test_api/v1,test_services,test_websockets}
+
+# Create empty __init__.py files
+find . -type d -not -path "./venv*" -not -path "./.git*" -not -path "." -not -path "./tests" | while read dir; do
+  touch "$dir/__init__.py"
+  echo "Created __init__.py in $dir"
+done
+
+# Create a .gitignore file
+cat > .gitignore << 'EOL'
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+
+# Database
+*.sqlite3
+*.db
+
+# Environment variables
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+EOL
+
+echo "Project structure created successfully!"
+echo "Next steps:"
+echo "1. Copy your Python files into the appropriate directories"
+echo "2. Create a virtual environment: python -m venv venv"
+echo "3. Activate the virtual environment: source venv/bin/activate"
+echo "4. Install requirements: pip install -r requirements.txt"
