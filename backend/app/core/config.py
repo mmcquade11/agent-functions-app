@@ -77,8 +77,6 @@ class Settings(BaseSettings):
             
         return values.data["REDIS_URI"]
 
-
-
     # Conductor (Auto-Reasoning, Auto-tools)
     CONDUCTOR_BASE_URL: str
     ARCEE_CONDUCTOR_SYSTEM_TOKEN: str
@@ -90,6 +88,16 @@ class Settings(BaseSettings):
     # Claude 3.7 (Agent Code Generator)
     CLAUDE_BASE_URL: str
     CLAUDE_API_KEY: str
+
+    SQLALCHEMY_DATABASE_URI: str = None
+
+    @field_validator("SQLALCHEMY_DATABASE_URI", mode="before")
+    def build_sqlalchemy_uri(cls, v, values):
+        return (
+            f"postgresql+asyncpg://{values.data['POSTGRES_USER']}:{values.data['POSTGRES_PASSWORD']}"
+            f"@{values.data['POSTGRES_SERVER']}:{values.data['POSTGRES_PORT']}/{values.data['POSTGRES_DB']}"
+        )
+
 
 
 # Create settings instance

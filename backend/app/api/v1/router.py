@@ -1,7 +1,8 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import workflows, executions, schedules, logs, audit, prompt
+from app.api.v1.endpoints import workflows, executions, schedules, logs, audit, prompt, agents, reasoning_agent
 from app.api.v1 import healthcheck
+
 
 # Create main API router
 api_router = APIRouter()
@@ -14,5 +15,8 @@ api_router.include_router(logs.router, prefix="/logs", tags=["Logs"])
 api_router.include_router(audit.router, prefix="/admin/audit", tags=["Admin"])
 api_router.include_router(healthcheck.router, prefix="")
 api_router.include_router(prompt.router, prefix="/prompt", tags=["Prompt"])
+api_router.include_router(reasoning_agent.router, prefix="/agents", tags=["Agents"])
+api_router.include_router(agents.router, prefix="/agents", tags=["Agents"])
+
 
 

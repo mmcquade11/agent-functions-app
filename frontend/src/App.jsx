@@ -1,38 +1,84 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useAuth0 } from "@auth0/auth0-react";
+import { useEffect, useRef, useState } from "react";
+
+// Pages
+import DashboardPage from "./pages/DashboardPage";
+import WorkflowsPage from "./pages/WorkflowsPage";
+import ExecutionsPage from "./pages/ExecutionsPage";
+import ExecutionDetailPage from "./pages/ExecutionDetailPage";
+import PromptEntryPage from "./pages/PromptEntryPage";
+import CreateAgentPage from "./pages/agents/CreateAgentPage";
+import LoginPage from "./pages/LoginPage";
 
 function App() {
-  const [count, setCount] = useState(0)
+  const {
+    isLoading,
+    isAuthenticated,
+    handleRedirectCallback,
+  } = useAuth0();
+  
+  const hasHandledRedirect = useRef(false);
+  const [redirectHandled, setRedirectHandled] = useState(false);
+  
+  useEffect(() => {
+    const runRedirectHandler = async () => {
+      if (
+        window.location.search.includes("code=") &&
+        window.location.search.includes("state=") &&
+        !hasHandledRedirect.current
+      ) {
+        hasHandledRedirect.current = true;
+  
+        try {
+          const result = await handleRedirectCallback();
+          const returnTo = result?.appState?.returnTo || "/dashboard";
+          window.history.replaceState({}, document.title, returnTo);
+          setRedirectHandled(true);
+        } catch (err) {
+          console.error("❌ Auth0 redirect error:", err);
+        }
+      } else {
+        setRedirectHandled(true);
+      }
+    };
+  
+    runRedirectHandler();
+  }, []);  
 
+  if (isLoading || !redirectHandled) {
+    return <div className="flex items-center justify-center h-screen">Loading...</div>;
+  }
+  
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-          <div className="text-3xl font-bold underline">
-  Hello Tailwind!
-</div>
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    <Routes>
+      <Route path="/" element={!isAuthenticated ? <LoginPage /> : <Navigate to="/dashboard" />} />
+      <Route
+        path="/dashboard"
+        element={isAuthenticated ? <DashboardPage /> : <Navigate to="/" />}
+      />
+      <Route
+        path="/workflows"
+        element={isAuthenticated ? <WorkflowsPage /> : <Navigate to="/" />}
+      />
+      <Route
+        path="/executions"
+        element={isAuthenticated ? <ExecutionsPage /> : <Navigate to="/" />}
+      />
+      <Route
+        path="/executions/:id"
+        element={isAuthenticated ? <ExecutionDetailPage /> : <Navigate to="/" />}
+      />
+      <Route
+        path="/prompt-entry"
+        element={isAuthenticated ? <PromptEntryPage /> : <Navigate to="/" />}
+      />
+      <Route
+        path="/agents/create"
+        element={isAuthenticated ? <CreateAgentPage /> : <Navigate to="/" />}
+      />
+    </Routes>
+  );
 }
 
-export default App
+export default App;

@@ -31,12 +31,29 @@ class Settings(BaseSettings):
         
         return PostgresDsn.build(
             scheme="postgresql+psycopg2",
-            username=values.data["POSTGRES_USER"],
-            password=values.data["POSTGRES_PASSWORD"],
-            host=values.data["POSTGRES_SERVER"],
-            port=values.data["POSTGRES_PORT"],
-            path=f"{values.data['POSTGRES_DB'] or ''}",
+            username=values.get("POSTGRES_USER"),
+            password=values.get("POSTGRES_PASSWORD"),
+            host=values.get("POSTGRES_SERVER"),
+            port=values.get("POSTGRES_PORT"),
+            path=f"{values.get('POSTGRES_DB') or ''}",
         )
+    ASYNC_DATABASE_URI: str = None
+    SQLALCHEMY_DATABASE_URI: str = None  # sync version for Alembic
+
+    @field_validator("ASYNC_DATABASE_URI", mode="before")
+    def build_async_uri(cls, v, values):
+        return (
+            f"postgresql+asyncpg://{values.data['POSTGRES_USER']}:{values.data['POSTGRES_PASSWORD']}"
+            f"@{values.data['POSTGRES_SERVER']}:{values.data['POSTGRES_PORT']}/{values.data['POSTGRES_DB']}"
+        )
+
+    @field_validator("SQLALCHEMY_DATABASE_URI", mode="before")
+    def build_sqlalchemy_uri(cls, v, values):
+        return (
+            f"postgresql+psycopg2://{values.data['POSTGRES_USER']}:{values.data['POSTGRES_PASSWORD']}"
+            f"@{values.data['POSTGRES_SERVER']}:{values.data['POSTGRES_PORT']}/{values.data['POSTGRES_DB']}"
+        )
+
     
     # Auth0 Settings
     AUTH0_DOMAIN: str
@@ -49,7 +66,7 @@ class Settings(BaseSettings):
     def assemble_auth0_issuer(cls, v: Optional[str], values: Dict[str, Any]) -> str:
         if v is not None:
             return v
-        return f"https://{values.data['AUTH0_DOMAIN']}/"
+        return f"https://{values.get('AUTH0_DOMAIN')}/"
     
     # Redis Settings (for WebSockets and Celery)
     REDIS_HOST: str = "localhost"
@@ -62,20 +79,20 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return v
             
-        if values.data.get("REDIS_PASSWORD"):
-            return f"redis://:{values.data['REDIS_PASSWORD']}@{values.data['REDIS_HOST']}:{values.data['REDIS_PORT']}/0"
+        if values.get("REDIS_PASSWORD"):
+            return f"redis://:{values.get('REDIS_PASSWORD')}@{values.get('REDIS_HOST')}:{values.get('REDIS_PORT')}/0"
         
-        return f"redis://{values.data['REDIS_HOST']}:{values.data['REDIS_PORT']}/0"
+        return f"redis://{values.get('REDIS_HOST')}:{values.get('REDIS_PORT')}/0"
     
     # Celery Settings
-    CELERY_BROKER_URL: str = None
+    CELERY_BROKER_URL: Optional[str] = None
     
     @field_validator("CELERY_BROKER_URL", mode="before")
     def assemble_celery_broker_url(cls, v: Optional[str], values: Dict[str, Any]) -> str:
-        if isinstance(v, str):
+        if isinstance(v, str) and v:
             return v
             
-        return values.data["REDIS_URI"]
+        return values.get("REDIS_URI")
 
 
 # Create settings instance

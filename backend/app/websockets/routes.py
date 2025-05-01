@@ -1,4 +1,5 @@
 from fastapi import WebSocket, WebSocketDisconnect, Depends, status, HTTPException, FastAPI, Query
+from app.websockets import ws_execute_agent
 import asyncio
 import logging
 from typing import Optional
@@ -10,6 +11,8 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+def setup_websocket_routes(app: FastAPI):
+    app.include_router(ws_execute_agent.router)
 
 # Custom WebSocket authentication middleware
 async def get_token_from_query(

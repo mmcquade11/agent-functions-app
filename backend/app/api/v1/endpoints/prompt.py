@@ -1,16 +1,21 @@
 # app/api/v1/endpoints/prompt.py
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from app.schemas.prompt import OptimizePromptRequest, OptimizePromptResponse, RoutePromptRequest, RoutePromptResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.api.deps import get_db
+from app.schemas.prompt import OptimizePromptRequest, OptimizePromptResponse, RoutePromptRequest, RoutePromptResponse, PromptCreate, PromptResponse
+from app.models.prompt import Prompt
 from app.api.deps import get_current_user
 from openai import AsyncOpenAI
+from uuid import uuid4
 from app.core.config import settings
 
 router = APIRouter()
 
-# -- Real GPT-4o Optimize Prompt Function --
+from openai import AsyncOpenAI
+from app.core.config import settings
 
-async def real_optimize_prompt(prompt: str) -> str:
+async def optimize_prompt(prompt: str) -> str:
     client = AsyncOpenAI(
         base_url=settings.OPENAI_BASE_URL,
         api_key=settings.OPENAI_API_KEY,
@@ -19,15 +24,25 @@ async def real_optimize_prompt(prompt: str) -> str:
     response = await client.chat.completions.create(
         model="gpt-4o",
         messages=[
-            {"role": "system", "content": "You are an assistant that rewrites user prompts to make them extremely clear, task-focused, and structured so that another LLM can easily generate Python code to complete the task."},
-            {"role": "user", "content": prompt}
+            {
+                "role": "system",
+                "content": (
+                    "You are a prompt optimizer. "
+                    "Your job is to rewrite user requests into direct, structured prompts "
+                    "that Claude can use to generate tool-using Python agents. "
+                    "Do not explain anything, just return the rewritten prompt clearly."
+                )
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
         ],
         temperature=0.3,
         top_p=1.0,
     )
 
-    optimized_prompt = response.choices[0].message.content
-    return optimized_prompt
+    return response.choices[0].message.content.strip()
 
 # -- Real GPT-4o Route Prompt Function (Needs Reasoning or Not) --
 
@@ -112,3 +127,22 @@ async def route_prompt(
         prompt=request.prompt,
         needs_reasoning=needs_reasoning
     )
+
+@router.post("/", response_model=PromptResponse, status_code=status.HTTP_201_CREATED)
+async def save_prompt(
+    payload: PromptCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    prompt = Prompt(
+        id=uuid4(),
+        user_id=current_user.sub,
+        original_prompt=payload.original_prompt,
+        optimized_prompt=payload.optimized_prompt,
+        needs_reasoning=str(payload.needs_reasoning).lower()
+    )
+    db.add(prompt)
+    await db.commit()
+    await db.refresh(prompt)
+    return prompt
+
