@@ -22,3 +22,13 @@ class AgentResponse(AgentCreate):
 
 class PromptPayload(BaseModel):
     prompt: str       
+
+class AgentUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    agent_code: Optional[str] = None
+
+    class Config:
+        orm_mode = True
+

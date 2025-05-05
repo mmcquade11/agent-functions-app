@@ -1,91 +1,74 @@
 # app/core/ws_auth.py
-from jose import jwt
-from jose.exceptions import JWTError
+
+import jwt
 from fastapi import HTTPException, status
-import requests
-import time
-from typing import Dict, Any
 import logging
+from app.core.config import settings
+import traceback
+import time
 
-# Cache the JWKS data to avoid frequent HTTP requests
-JWKS_CACHE = {}
-JWKS_CACHE_TIME = 0
-JWKS_CACHE_TTL = 3600  # Cache for 1 hour
+# Set up logging
+logger = logging.getLogger(__name__)
 
-async def verify_ws_jwt(token: str) -> Dict[str, Any]:
-    """Verify Auth0 JWT token and return its payload."""
+async def verify_ws_jwt(token: str):
+    """
+    Verify the JWT token from the WebSocket connection.
+    Returns the decoded payload if valid, raises an exception otherwise.
+    """
+    logger.info(f"Verifying WebSocket JWT token: {token[:20]}...")
+    
     try:
-        # 1. Get the public key from Auth0
-        jwks = await get_jwks()
+        # Get the Auth0 public key/secret from settings
+        secret_or_pub_key = settings.AUTH0_PUBLIC_KEY
         
-        # 2. Get the key ID from the token header
-        unverified_header = jwt.get_unverified_header(token)
-        if not unverified_header.get("kid"):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token header. No 'kid' found.",
-            )
+        # Options for verification
+        options = {
+            'verify_signature': True,  # Verify signature
+            'verify_exp': True,        # Verify expiration
+            'verify_iss': True,        # Verify issuer
+            'verify_aud': True,        # Verify audience
+        }
         
-        # 3. Find the matching key in JWKS
-        rsa_key = {}
-        for key in jwks["keys"]:
-            if key["kid"] == unverified_header["kid"]:
-                rsa_key = {
-                    "kty": key["kty"],
-                    "kid": key["kid"],
-                    "use": key["use"],
-                    "n": key["n"],
-                    "e": key["e"],
-                }
-                break
-                
-        if not rsa_key:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Unable to find appropriate key.",
-            )
-        
-        # 4. Verify and decode the token
+        # Try to decode the token with the Auth0 settings
         payload = jwt.decode(
             token,
-            rsa_key,
-            algorithms=["RS256"],
-            audience="https://workflow-automation-api",  # Replace with your Auth0 API identifier
-            issuer=f"https://dev-8qsl0ztjfq1yokoo.us.auth0.com/",  # Added https:// and trailing slash
+            secret_or_pub_key,
+            algorithms=['RS256'],
+            options=options,
+            audience=settings.AUTH0_API_AUDIENCE,
+            issuer=settings.AUTH0_ISSUER,
         )
         
-        # 5. Additional validation if needed
+        logger.info(f"Successfully verified WebSocket JWT token")
+        
+        # If verification passed, return the decoded payload
         return payload
         
-    except JWTError as e:
-        logging.error(f"JWT validation error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid authentication credentials: {str(e)}",
-        )
     except Exception as e:
-        logging.error(f"Unexpected error in token validation: {str(e)}")
+        logger.error(f"Error verifying WebSocket JWT: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        
+        # More detailed error logging for debugging
+        try:
+            # Try to decode the token without verification for debugging
+            unverified_payload = jwt.decode(
+                token, 
+                options={"verify_signature": False}, 
+                algorithms=['RS256']
+            )
+            logger.error(f"Token payload (unverified): {unverified_payload}")
+            
+            # Check specific potential issues
+            if 'exp' in unverified_payload and unverified_payload['exp'] < time.time():
+                logger.error("Token appears to be expired")
+            if 'aud' in unverified_payload and settings.AUTH0_API_AUDIENCE not in unverified_payload['aud']:
+                logger.error(f"Token audience mismatch: got {unverified_payload['aud']}, expected {settings.AUTH0_API_AUDIENCE}")
+            if 'iss' in unverified_payload and unverified_payload['iss'] != settings.AUTH0_ISSUER:
+                logger.error(f"Token issuer mismatch: got {unverified_payload['iss']}, expected {settings.AUTH0_ISSUER}")
+        except Exception as debug_e:
+            logger.error(f"Error debugging token: {str(debug_e)}")
+        
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
+            detail="Authentication error"
         )
-
-async def get_jwks():
-    """Get the JWKS from Auth0 with caching."""
-    global JWKS_CACHE, JWKS_CACHE_TIME
-    
-    # Return cached JWKS if it's still valid
-    current_time = time.time()
-    if JWKS_CACHE and (current_time - JWKS_CACHE_TIME) < JWKS_CACHE_TTL:
-        return JWKS_CACHE
-    
-    # Fetch new JWKS
-    jwks_url = f"https://dev-8qsl0ztjfq1yokoo.us.auth0.com/.well-known/jwks.json"  # Replace with your Auth0 domain
-    response = requests.get(jwks_url)
-    response.raise_for_status()
-    
-    # Update cache
-    JWKS_CACHE = response.json()
-    JWKS_CACHE_TIME = current_time
-    
-    return JWKS_CACHE
